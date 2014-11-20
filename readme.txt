@@ -1,0 +1,1 @@
+This is a branch from what was, at the time of development, the current code base for Meshlab to incorpoate changes needed to allow direct point insertation from a digitizer (portable CMM).  In this case, the MicroScribe.  These changes are being released in compliance with the terms of the GNU General Public License as published by the Free Software Foundation
