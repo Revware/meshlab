@@ -870,6 +870,7 @@ void MainWindow::runFilterScript()
 
         GLA()->Logf(GLLogStream::SYSTEM,"Re-Applied filter %s",qPrintable((*ii).first));
     }
+	qb->reset();
 }
 
 // Receives the action that wants to show a tooltip and display it
@@ -894,6 +895,8 @@ void MainWindow::startFilter()
 {
     if(currentViewContainer() == NULL) return;
     if(GLA() == NULL) return;
+
+	if(GLA()->getCurrentMeshEditor()&&!GLA()->getCurrentMeshEditor()->IsInterruptible()) return;
 
     // In order to avoid that a filter changes something assumed by the current editing tool,
     // before actually starting the filter we close the current editing tool (if any).
@@ -2229,7 +2232,21 @@ bool MainWindow::loadMesh(const QString& fileName, MeshIOInterface *pCurrentIOPl
     }
     meshDoc()->setBusy(true);
     pCurrentIOPlugin->setLog(&meshDoc()->Log);
-    if (!pCurrentIOPlugin->open(extension, fileName, *mm ,mask,*prePar,QCallBack,this /*gla*/))
+    //if (!pCurrentIOPlugin->open(extension, fileName, *mm ,mask,*prePar,QCallBack,this /*gla*/))
+	bool ret=false;
+	int tries=0;
+	do
+	{
+		pCurrentIOPlugin->clearErrorString();
+		while (tries<1000&&!(ret=pCurrentIOPlugin->open(extension, fileName, *mm ,mask,*prePar,QCallBack,this /*gla*/)))
+		{
+			Sleep(1);
+			tries++;
+		}
+	}
+	while(!pCurrentIOPlugin->errorMsg().isEmpty());
+    //if (!pCurrentIOPlugin->open(extension, fileName, *mm ,mask,*prePar,NULL,this /*gla*/))
+	if(!ret)
     {
         QMessageBox::warning(this, tr("Opening Failure"), QString("While opening: '%1'\n\n").arg(fileName)+pCurrentIOPlugin->errorMsg()); // text+
         pCurrentIOPlugin->clearErrorString();
@@ -2391,6 +2408,11 @@ bool MainWindow::importMesh(QString fileName)
                 postOpenDialog.exec();
                 pCurrentIOPlugin->applyOpenParameter(extension, *mm, par);
             }
+			if(m_StartupMode.length())
+			{
+				StartEditActionByName(m_StartupMode);
+				m_StartupMode="";
+			}
         }
         else
         {
@@ -2480,6 +2502,11 @@ void MainWindow::reload()
     update();
 }
 
+bool MainWindow::SaveMesh(MeshModel* mod)
+{
+	return exportMesh("",mod,true);
+}
+
 bool MainWindow::exportMesh(QString fileName,MeshModel* mod,const bool saveAllPossibleAttributes)
 {
     QStringList& suffixList = PM.outFilters;
@@ -2490,7 +2517,12 @@ bool MainWindow::exportMesh(QString fileName,MeshModel* mod,const bool saveAllPo
     //QString defaultExt = "*." + mod->suffixName().toLower();
     QString defaultExt = "*." + fi.suffix().toLower();
     if(defaultExt == "*.")
+	{
+		if(mod->shortName().isEmpty())
         defaultExt = "*.ply";
+		else
+			defaultExt = QString("*%1").arg(mod->shortName().mid(mod->shortName().lastIndexOf('.')));
+	}
     if (mod == NULL)
         return false;
     mod->meshModified() = false;
@@ -2716,6 +2748,225 @@ void MainWindow::setCustomize()
     CustomDialog dialog(currentGlobalParams,defaultGlobalParams, this);
     connect(&dialog,SIGNAL(applyCustomSetting()),this,SLOT(updateCustomSettings()));
     dialog.exec();
+}
+
+QAction* MainWindow::GetEditActionByName(QString name)
+{
+	QList<QString> actionnames; 
+	foreach(MeshEditInterfaceFactory *iEditFactory,PM.meshEditFactoryPlugins())
+    {
+		foreach(QAction* action, iEditFactory->actions())
+        {
+			actionnames<<action->text();
+			if(action->text().compare(name)==0)
+			{
+				return action;
+			}
+		}
+	}
+	return NULL;
+}
+
+void MainWindow::StartEditActionByName(QString name)
+{
+	QAction* action=GetEditActionByName(name);
+	if(action==NULL) return;
+	if(!GLA()->editorExistsForAction(action))
+    {
+        MeshEditInterfaceFactory *iEditFactory = qobject_cast<MeshEditInterfaceFactory *>(action->parent());
+        MeshEditInterface *iEdit = iEditFactory->getMeshEditInterface(action);
+        GLA()->addMeshEditor(action, iEdit);
+    }
+    GLA()->setCurrentEditAction(action);
+}
+
+MeshDecorateInterface* MainWindow::GetDecorationByName(QString name)
+{
+    foreach(MeshDecorateInterface *iDecFactory,PM.meshDecoratePlugins())
+    {
+		foreach(QAction* action, iDecFactory->actions())
+        {
+			if(action->text().compare(name)==0)
+			{
+				return iDecFactory;
+			}
+		}
+	}
+	return NULL;
+}
+
+void MainWindow::ToggleDecorationsByName(QString name)
+{
+	bool ret=false;
+    foreach(MeshDecorateInterface *iDecFactory,PM.meshDecoratePlugins())
+    {
+        foreach(QAction* action, iDecFactory->actions())
+        {
+			if(action->text().compare(name)==0)
+			{
+   MeshDecorateInterface *iDecorateTemp = qobject_cast<MeshDecorateInterface *>(action->parent());
+
+    if(iDecorateTemp->getDecorationClass(action)== MeshDecorateInterface::PerDocument)
+    {
+        bool found=GLA()->iPerDocDecoratorlist.removeOne(action);
+        if(found)
+        {
+            iDecorateTemp->endDecorate(action,*meshDoc(),GLA()->glas.currentGlobalParamSet,GLA());
+            iDecorateTemp->setLog(NULL);
+            GLA()->Logf(GLLogStream::SYSTEM,"Disabled Decorate mode %s",qPrintable(action->text()));
+        }
+        else{
+            iDecorateTemp->setLog(&meshDoc()->Log);
+            bool ret = iDecorateTemp->startDecorate(action,*meshDoc(), &currentGlobalParams, GLA());
+            if(ret) {
+                GLA()->iPerDocDecoratorlist.push_back(action);
+                GLA()->Logf(GLLogStream::SYSTEM,"Enabled Decorate mode %s",qPrintable(action->text()));
+            }
+            else GLA()->Logf(GLLogStream::SYSTEM,"Failed start of Decorate mode %s",qPrintable(action->text()));
+        }
+    }
+
+    if(iDecorateTemp->getDecorationClass(action)== MeshDecorateInterface::PerMesh)
+    {
+        MeshModel &currentMeshModel = *(meshDoc()->mm());
+        bool found=GLA()->iCurPerMeshDecoratorList().removeOne(action);
+        if(found)
+        {
+            iDecorateTemp->endDecorate(action,currentMeshModel,GLA()->glas.currentGlobalParamSet,GLA());
+            iDecorateTemp->setLog(NULL);
+            GLA()->Logf(0,"Disabled Decorate mode %s",qPrintable(action->text()));
+        }
+        else{
+            QString errorMessage;
+            if (iDecorateTemp->isDecorationApplicable(action,currentMeshModel,errorMessage)) {
+                iDecorateTemp->setLog(&meshDoc()->Log);
+                bool ret = iDecorateTemp->startDecorate(action,currentMeshModel, &currentGlobalParams, GLA());
+                if(ret) {
+                    GLA()->iCurPerMeshDecoratorList().push_back(action);
+                    GLA()->Logf(GLLogStream::SYSTEM,"Enabled Decorate mode %s",qPrintable(action->text()));
+                }
+                else GLA()->Logf(GLLogStream::SYSTEM,"Failed Decorate mode %s",qPrintable(action->text()));
+            }
+        }
+    }
+
+    layerDialog->updateDecoratorParsView();
+    layerDialog->updateLog(meshDoc()->Log);
+    layerDialog->update();
+    GLA()->update();
+			}
+		}
+	}
+	//return ret;
+}
+
+void MainWindow::StopDecorationByName(QString name)
+{
+	bool ret=false;
+    foreach(MeshDecorateInterface *iDecFactory,PM.meshDecoratePlugins())
+    {
+        foreach(QAction* action, iDecFactory->actions())
+        {
+			if(action->text().compare(name)==0)
+			{
+   MeshDecorateInterface *iDecorateTemp = qobject_cast<MeshDecorateInterface *>(action->parent());
+
+    if(iDecorateTemp->getDecorationClass(action)== MeshDecorateInterface::PerDocument)
+    {
+        bool found=GLA()->iPerDocDecoratorlist.removeOne(action);
+        if(found)
+        {
+            iDecorateTemp->endDecorate(action,*meshDoc(),GLA()->glas.currentGlobalParamSet,GLA());
+            iDecorateTemp->setLog(NULL);
+            GLA()->Logf(GLLogStream::SYSTEM,"Disabled Decorate mode %s",qPrintable(action->text()));
+        }else{
+			GLA()->Logf(GLLogStream::SYSTEM,"Decorate mode %s already stopped",qPrintable(action->text()));
+        }
+    }
+
+    if(iDecorateTemp->getDecorationClass(action)== MeshDecorateInterface::PerMesh)
+    {
+        MeshModel &currentMeshModel = *(meshDoc()->mm());
+        bool found=GLA()->iCurPerMeshDecoratorList().removeOne(action);
+        if(found)
+        {
+            iDecorateTemp->endDecorate(action,currentMeshModel,GLA()->glas.currentGlobalParamSet,GLA());
+            iDecorateTemp->setLog(NULL);
+            GLA()->Logf(0,"Disabled Decorate mode %s",qPrintable(action->text()));
+        }else{
+			GLA()->Logf(GLLogStream::SYSTEM,"Decorate mode %s already stopped",qPrintable(action->text()));
+        }
+    }
+
+    layerDialog->updateDecoratorParsView();
+    layerDialog->updateLog(meshDoc()->Log);
+    layerDialog->update();
+    GLA()->update();
+			}
+		}
+	}
+	//return ret;
+}
+
+void MainWindow::StartDecorationByName(QString name)
+{
+	bool ret=false;
+    foreach(MeshDecorateInterface *iDecFactory,PM.meshDecoratePlugins())
+    {
+        foreach(QAction* action, iDecFactory->actions())
+        {
+			if(action->text().compare(name)==0)
+			{
+   MeshDecorateInterface *iDecorateTemp = qobject_cast<MeshDecorateInterface *>(action->parent());
+
+    if(iDecorateTemp->getDecorationClass(action)== MeshDecorateInterface::PerDocument)
+    {
+        bool found=GLA()->iPerDocDecoratorlist.contains (action);
+        if(found)
+        {
+            GLA()->Logf(GLLogStream::SYSTEM,"Decorate mode %s already started",qPrintable(action->text()));
+        }
+        else{
+            iDecorateTemp->setLog(&meshDoc()->Log);
+            bool ret = iDecorateTemp->startDecorate(action,*meshDoc(), &currentGlobalParams, GLA());
+            if(ret) {
+                GLA()->iPerDocDecoratorlist.push_back(action);
+                GLA()->Logf(GLLogStream::SYSTEM,"Enabled Decorate mode %s",qPrintable(action->text()));
+            }
+            else GLA()->Logf(GLLogStream::SYSTEM,"Failed start of Decorate mode %s",qPrintable(action->text()));
+        }
+    }
+
+    if(iDecorateTemp->getDecorationClass(action)== MeshDecorateInterface::PerMesh)
+    {
+        MeshModel &currentMeshModel = *(meshDoc()->mm());
+        bool found=GLA()->iCurPerMeshDecoratorList().contains(action);
+        if(found)
+        {
+            GLA()->Logf(0,"Decorate mode %s already started",qPrintable(action->text()));
+        }
+        else{
+            QString errorMessage;
+            if (iDecorateTemp->isDecorationApplicable(action,currentMeshModel,errorMessage)) {
+                iDecorateTemp->setLog(&meshDoc()->Log);
+                bool ret = iDecorateTemp->startDecorate(action,currentMeshModel, &currentGlobalParams, GLA());
+                if(ret) {
+                    GLA()->iCurPerMeshDecoratorList().push_back(action);
+                    GLA()->Logf(GLLogStream::SYSTEM,"Enabled Decorate mode %s",qPrintable(action->text()));
+                }
+                else GLA()->Logf(GLLogStream::SYSTEM,"Failed Decorate mode %s",qPrintable(action->text()));
+            }
+        }
+    }
+
+    layerDialog->updateDecoratorParsView();
+    layerDialog->updateLog(meshDoc()->Log);
+    layerDialog->update();
+    GLA()->update();
+			}
+		}
+	}
+	//return ret;
 }
 
 //void MainWindow::renderBbox()        { GLA()->setDrawMode(GLW::DMBox     ); }

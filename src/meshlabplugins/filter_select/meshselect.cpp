@@ -51,6 +51,7 @@ SelectionFilterPlugin::SelectionFilterPlugin()
     CP_SELECT_TEXBORDER <<
     CP_SELECT_NON_MANIFOLD_FACE <<
     CP_SELECT_NON_MANIFOLD_VERTEX <<
+	FP_BORDER_FROM_SELECTION <<
     FP_SELECT_BY_COLOR;
 
   FilterIDType tt;
@@ -70,6 +71,9 @@ SelectionFilterPlugin::SelectionFilterPlugin()
             actionList.last()->setShortcut(QKeySequence ("Shift+Del"));
             actionList.last()->setIcon(QIcon(":/images/delete_facevert.png"));
       }
+	  if(tt==FP_BORDER_FROM_SELECTION){
+		    actionList.last()->setIcon(QIcon(":/images/border_vert.png"));
+	  }
     }
 }
 
@@ -89,6 +93,7 @@ SelectionFilterPlugin::SelectionFilterPlugin()
   case FP_SELECT_ERODE :                 return QString("Erode Selection");
   case FP_SELECT_DILATE :		           return QString("Dilate Selection");
   case FP_SELECT_BORDER:                 return QString("Select Border");
+  case FP_BORDER_FROM_SELECTION:                 return QString("Set Border flag on Selection");
   case FP_SELECT_BY_VERT_QUALITY :		       return QString("Select Faces by Vertex Quality");
   case FP_SELECT_BY_FACE_QUALITY :		       return QString("Select Faces by Face Quality");
   case FP_SELECT_BY_RANGE:						 return QString("Select Faces by Coord Range");
@@ -117,6 +122,7 @@ SelectionFilterPlugin::SelectionFilterPlugin()
      case FP_SELECT_NONE   : return tr("Clear the current set of selected faces");
      case FP_SELECT_ALL    : return tr("Select all the faces of the current mesh");
      case FP_SELECT_BORDER    : return tr("Select vertices and faces on the boundary");
+     case FP_BORDER_FROM_SELECTION    : return tr("Selected vertices and edges set as the border");
      case FP_SELECT_BY_VERT_QUALITY    : return tr("Select all the faces with all the vertexes within the specified quality range");
    case FP_SELECT_BY_FACE_QUALITY    : return tr("Select all the faces with within the specified quality range");
      case FP_SELECT_BY_COLOR:  return tr("Select part of the mesh based on its color.");
@@ -322,6 +328,10 @@ bool SelectionFilterPlugin::applyFilter(QAction *action, MeshDocument &md, RichP
                           tri::UpdateSelection<CMeshO>::FaceFromBorderFlag(m.cm);
                           tri::UpdateSelection<CMeshO>::VertexFromBorderFlag(m.cm);
   break;
+  case FP_BORDER_FROM_SELECTION:
+						for(CMeshO::VertexIterator vi=m.cm.vert.begin(); vi!=m.cm.vert.end(); ++vi)
+							if((!(*vi).IsD())&&(*vi).IsS()) (*vi).SetB();
+						break;
   case FP_SELECT_BY_VERT_QUALITY:
     {
       float minQ = par.getDynamicFloat("minQ");
@@ -415,6 +425,10 @@ bool SelectionFilterPlugin::applyFilter(QAction *action, MeshDocument &md, RichP
 
   default:  assert(0);
   }
+
+  vcg::tri::Allocator<CMeshO>::CompactVertexVector(m.cm);
+  vcg::tri::Allocator<CMeshO>::CompactFaceVector(m.cm);
+
   return true;
 }
 
@@ -473,6 +487,7 @@ int SelectionFilterPlugin::postCondition(QAction *action) const
       case CP_SELECT_NON_MANIFOLD_FACE:
       case CP_SELECT_NON_MANIFOLD_VERTEX:
     return MeshModel::MM_VERTFLAGSELECT | MeshModel::MM_FACEFLAGSELECT;
+	  //case FP_BORDER_FROM_SELECTION: return MeshModel::MM_VERTFLAG;
   }
   return MeshModel::MM_UNKNOWN;
 }
@@ -489,6 +504,7 @@ int SelectionFilterPlugin::getPreConditions( QAction * action) const
     case FP_SELECT_BY_VERT_QUALITY:		return MeshModel::MM_VERTQUALITY;
   case FP_SELECT_BY_FACE_QUALITY:		return MeshModel::MM_FACEQUALITY;
     case CP_SELECT_TEXBORDER:     return MeshModel::MM_WEDGTEXCOORD;
+		//case FP_BORDER_FROM_SELECTION:				return MeshModel::MM_VERTFLAG;
 	}
   return 0;
 }

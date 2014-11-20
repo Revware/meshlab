@@ -461,6 +461,10 @@ void MainWindow::createActions()
     showFilterScriptAct->setEnabled(false);
     connect(showFilterScriptAct, SIGNAL(triggered()), this, SLOT(showFilterScript()));
 
+	runFilterScriptAct = new QAction(tr("Run current filter script"),this);
+    connect(runFilterScriptAct, SIGNAL(triggered()), this, SLOT(runFilterScript()));
+
+
     //////////////Action Menu Preferences /////////////////////////////////////////////////////////////////////
     setCustomizeAct	  = new QAction(tr("&Options..."),this);
     connect(setCustomizeAct, SIGNAL(triggered()), this, SLOT(setCustomize()));
@@ -1183,6 +1187,7 @@ void MainWindow::saveRecentFileList(const QString &fileName)
         checkForUpdates(false);
 #endif
         int congratsMeshCounter = settings.value("congratsMeshCounter",50).toInt();
+#if not defined(__DISABLE_CONGRATS_DIALOG__)
         if(loadedMeshCounter > congratsMeshCounter * 2 )
         {
             // This preference values store when you did the last request for a mail
@@ -1196,6 +1201,7 @@ void MainWindow::saveRecentFileList(const QString &fileName)
             if(congratsDialog->result()==QDialog::Accepted)
                 QDesktopServices::openUrl(QUrl("mailto:p.cignoni@isti.cnr.it;g.ranzuglia@isti.cnr.it?subject=[MeshLab] Reporting Info on MeshLab Usage"));
         }
+#endif
     }
 }
 

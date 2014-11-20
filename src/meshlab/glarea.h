@@ -115,8 +115,6 @@ public:
 
 	void toggleHelpVisible()      {helpVisible = !helpVisible; update();}  
 	void setBackFaceCulling(bool enabled);
-	void setLight(bool state);
-	void setLightMode(bool state,LightingModel lmode);
 	void saveSnapshot();
 	void setLightModel(RenderMode& rm);
 	void setView();
@@ -142,6 +140,9 @@ public slots:
 	void updateTexture(); // slot for forcing the texture reload. 
 	void resetTrackBall();
 	void showRaster(bool resetViewFlag);
+	void setLight(bool state);
+	void setLightMode(bool state,LightingModel lmode);
+
 
 	//current raster will be reloaded and repaint function will be called
 	void completeUpdateRequested();
@@ -185,6 +186,19 @@ public slots:
 			}
 		}
   
+
+signals:
+	bool save(MeshModel*);
+	bool saveAs(MeshModel*);
+	void runFilterScript();
+	void reloadFile();
+public slots:
+	void filterScript();
+	void ToggleDecorationsByName(QString name); 
+	void StartDecorationByName(QString name);
+	void StopDecorationByName(QString name);
+	MeshDecorateInterface* GetDecorationByName(QString name);
+
 signals:
 	void updateMainWindowMenus(); //updates the menus of the meshlab MainWindow
 	void glareaClosed();					//someone has closed the glarea
@@ -247,6 +261,11 @@ public slots:
     void sendViewerShot(QString name);
     void sendRasterShot(QString name);
 
+	void _mousePressEvent(QMouseEvent *event);
+	void _mouseMoveEvent(QMouseEvent *event);
+	void _mouseReleaseEvent(QMouseEvent *event);
+	void _wheelEvent(QWheelEvent*e);
+	void SetRealTimeFontSize(int size);
 
 public:
 	vcg::Point3f getViewDir(); 
@@ -299,6 +318,7 @@ private:
 	QAction *currentShader;
 	QAction *lastFilterRef; // reference to last filter applied
 	QFont	qFont;			//font settings
+	int realTimeLogFontSize;
 
 	// Editing support
 	MeshEditInterface *iEdit;

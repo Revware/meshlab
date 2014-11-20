@@ -566,6 +566,8 @@ void MCSimplify( MeshType &m, float absoluteError, bool preserveBB, vcg::CallBac
          if(v1[2]==v2[2] && v1[1]!=v1[1] && v2[0]!=v2[0]) ZSet.push_back(v0[2]);
          if(ZSet.size()>100) break;
        }
+		if(ZSet.size())
+		{
       std::sort(ZSet.begin(),ZSet.end());
       std::vector<float>::iterator lastV = std::unique(ZSet.begin(),ZSet.end());
       ZSet.resize(lastV-ZSet.begin());
@@ -577,6 +579,7 @@ void MCSimplify( MeshType &m, float absoluteError, bool preserveBB, vcg::CallBac
       }
       absoluteError= Delta/4.0f;
     }
+	}
 //    qDebug("Simplifying at absoluteError=%f",absoluteError);
 
     float TargetError = absoluteError;

@@ -94,12 +94,20 @@ private slots:
   void saveProject();
 
 public slots:
+	bool SaveMesh(MeshModel* mod);
+	void Closing();
   bool importMesh(QString fileName=QString());
   bool importRaster(const QString& fileImg = QString());
   bool openProject(QString fileName=QString());
   bool appendProject(QString fileName=QString());
   void updateCustomSettings();
 
+  void ToggleDecorationsByName(QString name);
+  void StartDecorationByName(QString name);
+  void StopDecorationByName(QString name);
+  MeshDecorateInterface* GetDecorationByName(QString name);
+  void StartEditActionByName(QString name);
+  QAction* GetEditActionByName(QString name);
 
   void delCurrentMesh();
   void delCurrentRaster();
@@ -536,6 +544,8 @@ protected:
       qDebug("event fileopen %s",qPrintable(fileEvent->file()));
       return true;
     } else {
+		if((obj==mainWindow)&&event->type()==QEvent::Close)
+			mainWindow->Closing();
       // standard event processing
       return QObject::eventFilter(obj, event);
     }

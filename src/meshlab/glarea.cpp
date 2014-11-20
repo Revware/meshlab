@@ -42,6 +42,7 @@ using namespace vcg;
 
 GLArea::GLArea(MultiViewer_Container *mvcont, RichParameterSet *current)
     : QGLWidget(),interrbutshow(false)
+	,realTimeLogFontSize(11)
 {
     this->setParent(mvcont);
     parentmultiview = mvcont;
@@ -93,6 +94,14 @@ GLArea::GLArea(MultiViewer_Container *mvcont, RichParameterSet *current)
     connect(this, SIGNAL(updateLayerTable()), this->mw(), SIGNAL(updateLayerTable()));
     connect(md(),SIGNAL(meshAdded(int)),this,SLOT(meshAdded(int)));
     connect(md(),SIGNAL(meshRemoved(int)),this,SLOT(meshRemoved(int)));
+
+    connect(this, SIGNAL(runFilterScript()), this->mw(), SLOT(runFilterScript()));
+    connect(this, SIGNAL(reloadFile()), this->mw(), SLOT(reload()));
+    connect(this, SIGNAL(save(MeshModel*)), this->mw(), SLOT(SaveMesh(MeshModel*)));
+	connect(this, SIGNAL(ToggleDecorationsByName(QString)),this->mw(),SIGNAL(ToggleDecorationsByName(QString)) );
+	connect(this, SIGNAL(StartDecorationByName(QString)),this->mw(),SIGNAL(StartDecorationByName(QString)) );
+	connect(this, SIGNAL(StopDecorationByName(QString)),this->mw(),SIGNAL(StopDecorationByName(QString)) );
+	connect(this, SIGNAL(GetDecorationByName(QString)),this->mw(),SIGNAL(GetDecorationByName(QString)) );
 
     foreach(MeshModel* mesh,md()->meshList)
         rendermodemap[mesh->id()] = RenderMode();
@@ -651,7 +660,7 @@ void GLArea::displayRealTimeLog(QPainter *painter)
 
     qFont.setStyleStrategy(QFont::PreferAntialias);
     qFont.setFamily("Helvetica");
-    qFont.setPixelSize(11);
+    qFont.setPixelSize(realTimeLogFontSize);
     painter->setFont(qFont);
     float margin = qFont.pixelSize();
     QFontMetrics metrics = QFontMetrics(font());
@@ -981,14 +990,7 @@ void GLArea::keyPressEvent ( QKeyEvent * e )
     }
 }
 
-void GLArea::mousePressEvent(QMouseEvent*e)
-{
-    e->accept();
-    if(!this->hasFocus()) this->setFocus();
-
-    if( (iEdit && !suspendedEditor) )
-        iEdit->mousePressEvent(e,*mm(),this);
-    else
+void GLArea::_mousePressEvent(QMouseEvent*e)
     {
         if( e->button()==Qt::RightButton) // Select a new current mesh
         {
@@ -1017,14 +1019,23 @@ void GLArea::mousePressEvent(QMouseEvent*e)
             else trackball_light.MouseDown(QT2VCG_X(this,e), QT2VCG_Y(this,e), QT2VCG(e->button(), Qt::NoModifier ) );
         }
     }
+
+void GLArea::mousePressEvent(QMouseEvent*e)
+{
+    e->accept();
+    if(!this->hasFocus()) this->setFocus();
+
+    if( (iEdit && !suspendedEditor) )
+        iEdit->mousePressEvent(e,*mm(),this);
+    else
+    {
+		_mousePressEvent(e);
+    }
     update();
 }
 
-void GLArea::mouseMoveEvent(QMouseEvent*e)
+void GLArea::_mouseMoveEvent(QMouseEvent*e)
 {
-    if( (iEdit && !suspendedEditor) )
-        iEdit->mouseMoveEvent(e,*mm(),this);
-    else {
         if (isDefaultTrackBall())
         {
             trackball.MouseMove(QT2VCG_X(this,e), QT2VCG_Y(this,e));
@@ -1032,10 +1043,24 @@ void GLArea::mouseMoveEvent(QMouseEvent*e)
         }
         else trackball_light.MouseMove(QT2VCG_X(this,e), QT2VCG_Y(this,e));
     }
+
+void GLArea::mouseMoveEvent(QMouseEvent*e)
+{
+    if( (iEdit && !suspendedEditor) )
+        iEdit->mouseMoveEvent(e,*mm(),this);
+    else {
+		_mouseMoveEvent(e);
+    }
     update();
 }
 
 // When mouse is released we set the correct mouse cursor
+void GLArea::_mouseReleaseEvent(QMouseEvent*e)
+{
+	if (isDefaultTrackBall()) trackball.MouseUp(QT2VCG_X(this,e), QT2VCG_Y(this,e), QT2VCG(e->button(), e->modifiers() ) );
+	else trackball_light.MouseUp(QT2VCG_X(this,e), QT2VCG_Y(this,e), QT2VCG(e->button(),e->modifiers()) );
+	setCursorTrack(trackball.current_mode);
+}
 void GLArea::mouseReleaseEvent(QMouseEvent*e)
 {
     //clearFocus();
@@ -1043,9 +1068,7 @@ void GLArea::mouseReleaseEvent(QMouseEvent*e)
     if( (iEdit && !suspendedEditor) )
         iEdit->mouseReleaseEvent(e,*mm(),this);
     else {
-        if (isDefaultTrackBall()) trackball.MouseUp(QT2VCG_X(this,e), QT2VCG_Y(this,e), QT2VCG(e->button(), e->modifiers() ) );
-        else trackball_light.MouseUp(QT2VCG_X(this,e), QT2VCG_Y(this,e), QT2VCG(e->button(),e->modifiers()) );
-        setCursorTrack(trackball.current_mode);
+		_mouseReleaseEvent(e);
     }
 
     update();
@@ -1058,14 +1081,12 @@ void GLArea::tabletEvent(QTabletEvent*e)
     else e->ignore();
 }
 
-void GLArea::wheelEvent(QWheelEvent*e)
-{
-    setFocus();
-    if( (iEdit && !suspendedEditor) )
+void GLArea::SetRealTimeFontSize(int size)
     {
-        iEdit->wheelEvent(e,*mm(),this);
+	realTimeLogFontSize=size;
     }
-    else
+
+void GLArea::_wheelEvent(QWheelEvent*e)
     {
         const int WHEEL_STEP = 120;
         float notch = e->delta()/ float(WHEEL_STEP);
@@ -1085,6 +1106,18 @@ void GLArea::wheelEvent(QWheelEvent*e)
                 trackball.MouseWheel( e->delta()/ float(WHEEL_STEP));
             break;
         }
+    }
+
+void GLArea::wheelEvent(QWheelEvent*e)
+{
+    setFocus();
+    if( (iEdit && !suspendedEditor) )
+    {
+        iEdit->wheelEvent(e,*mm(),this);
+    }
+    else
+    {
+		_wheelEvent(e);
     }
     update();
 }
@@ -1461,6 +1494,32 @@ void GLArea::resetTrackBall()
     trackball.track.tra =  -this->md()->bbox().Center();
     update();
 }
+
+void GLArea::filterScript()
+{
+	runFilterScript();
+}
+
+void GLArea::ToggleDecorationsByName(QString name)
+{
+	mw()->ToggleDecorationsByName(name);
+}
+
+void GLArea::StartDecorationByName(QString name)
+{
+	mw()->StartDecorationByName(name);
+}
+
+void GLArea::StopDecorationByName(QString name)
+{
+	mw()->StopDecorationByName(name);
+}
+
+MeshDecorateInterface* GLArea::GetDecorationByName(QString name)
+{
+	return mw()->GetDecorationByName(name);
+}
+
 
 void GLArea::hideEvent(QHideEvent * /*event*/)
 {

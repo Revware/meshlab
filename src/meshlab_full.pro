@@ -17,6 +17,7 @@ SUBDIRS       = common \
                 meshlabplugins/io_gts \
                 meshlabplugins/io_expe \
                 meshlabplugins/io_pdb \
+				meshlabplugins/io_vp \
 				meshlabplugins/filter_aging \
 				meshlabplugins/filter_ao \
                 meshlabplugins/filter_autoalign \
@@ -27,6 +28,7 @@ SUBDIRS       = common \
                 meshlabplugins/filter_colorproc \
 				meshlabplugins/filter_color_projection \
                 meshlabplugins/filter_create \
+				meshlabplugins/filter_cut \
                 meshlabplugins/filter_csg \
 				meshlabplugins/filter_dirt \
                 meshlabplugins/filter_fractal \
@@ -58,6 +60,7 @@ SUBDIRS       = common \
                 meshlabplugins/render_rfx \
                 meshlabplugins/decorate_base \
                 meshlabplugins/decorate_background \
+                meshlabplugins/decorate_labels \
                 meshlabplugins/decorate_shadow \
                 meshlabplugins/decorate_raster_proj \
                 meshlabplugins/edit_select \
